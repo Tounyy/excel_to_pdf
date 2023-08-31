@@ -29,7 +29,6 @@ if authentication_status:
         'df': None
     }
     ", clear_on_submit=True"
-
     st.title('Importování excel tabulky do pdf')
     with st.form("I-form"):
         input_nazev_faktury = st.text_input("Název Faktury")
