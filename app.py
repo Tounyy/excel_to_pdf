@@ -3,10 +3,10 @@ from yaml.loader import SafeLoader
 import streamlit as st
 from fpdf import FPDF
 import pandas as pd
+import datetime
 import yaml
 import time
 import os
-import io
 
 with open('password/password.yaml') as file:
     config = yaml.load(file, Loader=SafeLoader)
@@ -28,7 +28,9 @@ if authentication_status:
         'input_nazev_faktury': None,
         'df': None
     }
+
     ", clear_on_submit=True"
+
     st.title('Importování excel tabulky do pdf')
     with st.form("I-form"):
         input_nazev_faktury = st.text_input("Název Faktury")
@@ -46,21 +48,126 @@ if authentication_status:
             else:
                 df = pd.read_excel(uploaded_file, engine='openpyxl')
                 df['Celková cena'] = df['Ks'] * df['Cena ks']
-                df['Název faktury'] = input_nazev_faktury
-
                 data_dict['input_nazev_faktury'] = input_nazev_faktury
                 data_dict['df'] = df
-
+    
     if data_dict['df'] is not None:
+        aktualni_datum = datetime.datetime.now().strftime("%Y-%m-%d")
         pdf = FPDF(format='A4')
         pdf.add_page()
         pdf.add_font("DejaVu", "", "font/dejavu-fonts-ttf-2.37/ttf/DejaVuSansCondensed.ttf", uni=True)
         pdf.set_font("DejaVu", size=12)
+        col_width = 40  
 
-        pdf.cell(200, 10, f"Faktura {data_dict['input_nazev_faktury']}", ln=True, align='C')
+        pdf.set_text_color(30, 30, 30) 
+        pdf.set_font("DejaVu", size=14)
+        pdf.cell(0, 10, f"Faktura {data_dict['input_nazev_faktury']}", ln=True, align='L') 
         pdf.ln(10)
 
-        pdf_output = io.BytesIO(pdf.output(dest="S"))
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("DejaVu", size=9)
+        pdf.set_xy(10, 26) 
+        text_block1 = "Hammer Masters s.r.o.\nU Vodárny 1081/2\n530 09 Pardubice\nČeská republika\nSpolečnost zapsal do OR Krajský\nsoud v Hradci Králové pod spisovou\nznačkou C 1111.\nIČO: 83125649\nDIČ: CZ83125649\nPlátce DPH\nTELEFON: +420 (466) 2200 0001\nEMAIL: info@hammermasters.cz\n"
+        pdf.multi_cell(100, 7, text_block1, align='L')
+
+        pdf.set_font("DejaVu", size=9)
+        pdf.set_xy(130, 25.5)  
+        text_block2 = f"Dodací list pro:\nBytový komplex Slunečná zahrada, s.r.o.\nKvětnová 781/15\n140 00 Praha 4\nČeská republika\nDodací adresa:\nBytový komplex Slunečná zahrada\nU Slunečního vršku 837\n140 00 Praha 4\nDatum vystavení {aktualni_datum}"
+        pdf.multi_cell(100, 7, text_block2, align='L')
+
+        pdf.ln(20)
+        pdf.set_draw_color(0, 0, 0)  
+        pdf.line(10, pdf.get_y(), 190 + 10, pdf.get_y()) 
+        pdf.ln(5)
+
+        col_width = pdf.w / 4 
+        row_height = pdf.font_size
+
+        pdf.set_font("DejaVu", size=10)
+        column_width = 40
+        column_spacing = 5 
+        row_spacing = 3 
+
+        for column_name in data_dict['df'].columns:
+            pdf.cell(column_width, row_height, column_name, border=0, align='R')
+            pdf.cell(column_spacing)  
+        pdf.ln(row_height)
+        pdf.ln(3)
+
+        # Vytvořte seznam řádků pro PDF
+        pdf_rows = []
+
+        # Nastavte menší výšku řádku
+        smaller_row_height = 1.70  # Změňte podle potřeby
+
+        for index, row in data_dict['df'].iterrows():
+            # Předpokládáme, že sloupec "Popis" je nejdelší
+            popis_value = row['Popis']
+            if len(str(popis_value)) > 25:
+                parts = [popis_value[i:i+25] for i in range(0, len(popis_value), 25)]
+                # Přidáme prázdné řádky pro popis, aby se zachovala výška pro ostatní sloupce
+                max_rows = len(parts)
+                for i in range(max_rows):
+                    pdf_row = []
+                    for column_name in data_dict['df'].columns:
+                        if column_name == 'Popis':
+                            if i < len(parts):
+                                # Přidáme pomlčku na konec řádku, pokud to není poslední řádek
+                                if i == max_rows - 1:
+                                    pdf_row.append(parts[i])
+                                else:
+                                    pdf_row.append(parts[i] + "-")
+                            else:
+                                pdf_row.append("")  # Prázdný řádek po dokončení textu
+                        else:
+                            if i == 0:
+                                # Přidáme data z ostatních sloupců pouze pro první řádek popisu
+                                cell_value = row[column_name]
+                                try:
+                                    float_value = float(cell_value)
+                                    formatted_value = "{:,.2f}".format(float_value)
+                                    pdf_row.append(formatted_value)
+                                except ValueError:
+                                    pdf_row.append(cell_value)
+                            else:
+                                pdf_row.append("")  # Prázdný řádek pro ostatní sloupce
+                    pdf_rows.append(pdf_row)
+            else:
+                pdf_row = []
+                for column_name in data_dict['df'].columns:
+                    if column_name == 'Popis':
+                        pdf_row.append(popis_value)
+                    else:
+                        cell_value = row[column_name]
+                        try:
+                            float_value = float(cell_value)
+                            formatted_value = "{:,.2f}".format(float_value)
+                            pdf_row.append(formatted_value)
+                        except ValueError:
+                            pdf_row.append(cell_value)
+                pdf_rows.append(pdf_row)
+
+        # Nyní použijte seznam řádků pro vytvoření PDF s menší výškou řádku
+        for pdf_row in pdf_rows:
+            for cell_value in pdf_row:
+                pdf.cell(column_width, smaller_row_height, cell_value, border=0, align='R')
+                pdf.cell(column_spacing)
+            pdf.ln(smaller_row_height)  # Použijeme menší výšku řádku zde také
+            pdf.ln(row_spacing)
+
+        pdf.ln(1)
+        pdf.set_draw_color(0, 0, 0)  
+        pdf.line(10, pdf.get_y(), 190 + 10, pdf.get_y()) 
+        pdf.ln(1.50)
+
+        pdf.cell(column_width, row_height, "Celková cena", border=0,  align='R')
+        pdf.cell(column_width, row_height, "", border=0)  
+        pdf.cell(column_width, row_height, "", border=0)  
+        total_price = df['Celková cena'].sum()
+        formatted_sum = "{:,.2f}".format(total_price)
+        pdf.cell(column_width * 1.375, row_height, formatted_sum, border=0, align='R')  
+
+        pdf_output = pdf.output(dest="S").encode("latin1")
         st.subheader("Stáhnout PDF:")
         st.download_button(
             label="Stáhnout PDF", 
