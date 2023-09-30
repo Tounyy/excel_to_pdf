@@ -30,8 +30,8 @@ if authentication_status:
     }
 
     st.title('Importování excel tabulky do pdf')
-    with st.form("I-form", clear_on_submit=True):
-        input_nazev_faktury = st.text_input("Název Faktury")
+    with st.form("I-form"):
+        input_nazev_faktury = st.text_input("Zadejte prosím číslo dodacího listu")
         uploaded_file = st.file_uploader('Vložte prosím soubor Excel.', type='xlsx')
 
         if st.form_submit_button("Uložit"):
@@ -59,7 +59,7 @@ if authentication_status:
 
         pdf.set_text_color(30, 30, 30) 
         pdf.set_font("DejaVu", size=14)
-        pdf.cell(0, 10, f"Faktura {data_dict['input_nazev_faktury']}", ln=True, align='L') 
+        pdf.cell(0, 10, f"Dodací list č. {data_dict['input_nazev_faktury']}", ln=True, align='L') 
         pdf.ln(10)
 
         pdf.set_text_color(0, 0, 0)
@@ -70,7 +70,7 @@ if authentication_status:
 
         pdf.set_font("DejaVu", size=9)
         pdf.set_xy(130, 25.5)  
-        text_block2 = f"Dodací list pro:\nBytový komplex Slunečná zahrada, s.r.o.\nKvětnová 781/15\n140 00 Praha 4\nČeská republika\nDodací adresa:\nBytový komplex Slunečná zahrada\nU Slunečního vršku 837\n140 00 Praha 4\nDatum vystavení {aktualni_datum}"
+        text_block2 = f"Odběratel:\nBytový komplex Slunečná zahrada, s.r.o.\nKvětnová 781/15\n140 00 Praha 4\nČeská republika\nDodací adresa:\nBytový komplex Slunečná zahrada\nU Slunečního vršku 837\n140 00 Praha 4\nDatum vystavení {aktualni_datum}"
         pdf.multi_cell(100, 7, text_block2, align='L')
 
         pdf.ln(20)
@@ -78,17 +78,41 @@ if authentication_status:
         pdf.line(10, pdf.get_y(), 190 + 10, pdf.get_y()) 
         pdf.ln(5)
 
-        col_width = pdf.w / 4 
+        col_width = pdf.w / 4
         row_height = pdf.font_size
 
         pdf.set_font("DejaVu", size=10)
         column_width = 40
-        column_spacing = 5 
-        row_spacing = 3 
+        column_spacing = 5
+        row_spacing = 3
+
+        column_spacing_others = 2  # Default spacing for other columns
+        column_spacing_kss = 2  # Spacing for the "Ks" column
+        column_spacing_cena_kss = 2  # Spacing for the "Cena ks" column
+        column_spacing_celkova_cenas = 2  # Spacing for the "Celková cena" column
 
         for column_name in data_dict['df'].columns:
-            pdf.cell(column_width, row_height, column_name, border=0, align='R')
-            pdf.cell(column_spacing)  
+            if column_name == "Popis":
+                column_width = 70
+                align = 'L'  # Nastavte zarovnání na levý okraj pro sloupec "Popis"
+            elif column_name == "Ks":
+                column_width = 30
+                column_spacing = column_spacing_kss
+                align = 'R'
+            elif column_name == "Cena ks":
+                column_width = 35
+                column_spacing = column_spacing_cena_kss
+                align = 'R'
+            elif column_name == "Celková cena":
+                column_width = 40
+                column_spacing = column_spacing_celkova_cenas
+                align = 'R'
+            else:
+                column_spacing = column_spacing_others
+                align = 'R'
+            
+            pdf.cell(column_width, row_height, column_name, border=0, align=align)  # Nastavte zarovnání
+            pdf.cell(column_spacing)
         pdf.ln(row_height)
         pdf.ln(3)
 
@@ -96,13 +120,13 @@ if authentication_status:
         pdf_rows = []
 
         # Nastavte menší výšku řádku
-        smaller_row_height = 1.70  # Změňte podle potřeby
+        smaller_row_height = 2.3  # Změňte podle potřeby
 
         for index, row in data_dict['df'].iterrows():
             # Předpokládáme, že sloupec "Popis" je nejdelší
             popis_value = row['Popis']
-            if len(str(popis_value)) > 25:
-                parts = [popis_value[i:i+25] for i in range(0, len(popis_value), 25)]
+            if len(str(popis_value)) > 46:
+                parts = [popis_value[i:i+46] for i in range(0, len(popis_value), 46)]
                 # Přidáme prázdné řádky pro popis, aby se zachovala výška pro ostatní sloupce
                 max_rows = len(parts)
                 for i in range(max_rows):
@@ -144,13 +168,23 @@ if authentication_status:
                         except ValueError:
                             pdf_row.append(cell_value)
                 pdf_rows.append(pdf_row)
-
+                
         # Nyní použijte seznam řádků pro vytvoření PDF s menší výškou řádku
         for pdf_row in pdf_rows:
-            for cell_value in pdf_row:
-                pdf.cell(column_width, smaller_row_height, cell_value, border=0, align='R')
-                pdf.cell(column_spacing)
-            pdf.ln(smaller_row_height)  # Použijeme menší výšku řádku zde také
+            for i, cell_value in enumerate(pdf_row):
+                if i == 0:  # První sloupec (Popis)
+                    pdf.cell(column_width + 30, smaller_row_height, cell_value, border=0, align='L')
+                    pdf.cell(column_spacing - 10)
+                elif i == 1:  
+                    pdf.cell(column_width + 3, smaller_row_height, cell_value, border=0, align='R')
+                    pdf.cell(column_spacing - 10)
+                elif i == 2:  
+                    pdf.cell(column_width + 5, smaller_row_height, cell_value, border=0, align='R')
+                    pdf.cell(column_spacing - 9)
+                else:
+                    pdf.cell(column_width + 9, smaller_row_height, cell_value, border=0, align='R')
+                    pdf.cell(column_spacing - 15)
+            pdf.ln(smaller_row_height) 
             pdf.ln(row_spacing)
 
         pdf.ln(1)
@@ -158,12 +192,12 @@ if authentication_status:
         pdf.line(10, pdf.get_y(), 190 + 10, pdf.get_y()) 
         pdf.ln(1.50)
 
-        pdf.cell(column_width, row_height, "Celková cena", border=0,  align='R')
+        pdf.cell(column_width + 30, row_height, "Celková cena", border=0,  align='L')
         pdf.cell(column_width, row_height, "", border=0)  
         pdf.cell(column_width, row_height, "", border=0)  
         total_price = df['Celková cena'].sum()
         formatted_sum = "{:,.2f}".format(total_price)
-        pdf.cell(column_width * 1.375, row_height, formatted_sum, border=0, align='R')  
+        pdf.cell(column_width - 6.05, row_height, formatted_sum, border=0, align='R')
 
         pdf_output = pdf.output(dest="S").encode("latin1")
         st.subheader("Stáhnout PDF:")
@@ -177,7 +211,7 @@ if authentication_status:
     data = {
         "Popis": ["", "", ""],
         "Ks": ["", "", ""],
-        "Cena ks": ["", "", ""]
+        "Cena": ["", "", ""]
     }
 
     empty_df = pd.DataFrame(data)
